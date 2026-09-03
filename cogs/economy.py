@@ -222,12 +222,7 @@ class Economy(commands.Cog):
         emojis = {"comuni": "📦", "rare": "🔷", "epiche": "💜", "mitiche": "🔥", "leggendaria": "👑"}
         for box, price in config.BOX_PRICES.items():
             embed.add_field(name=f"{emojis[box]} BOX {box.upper()}", value=f"{price} {config.CURRENCY_NAME}", inline=False)
-        embed.add_field(
-            name="Ruolo Speciale",
-            value=f"Con {config.FIRE_SHOP_COST} {config.CURRENCY_NAME} puoi comprare <@&{config.FIRE_SHOP_ROLE}>",
-            inline=False,
-        )
-        embed.set_footer(text="Usa /openbox <tipo> per aprire una box, /buyrole per il ruolo")
+        embed.set_footer(text="Usa /openbox <tipo> per aprire una box")
         await ctx.send(embed=embed)
 
     # ---------- OPENBOX ----------
@@ -254,20 +249,6 @@ class Economy(commands.Cog):
         if got_boost:
             msg += "\n🚀 **BOOST ECONOMICO** ottenuto!"
         await ctx.send(msg)
-
-    # ---------- BUY ROLE ----------
-    @commands.hybrid_command(name="buyrole", description="Compra il ruolo speciale con Aura Coins")
-    async def buyrole(self, ctx):
-        econ, u = data.get_user_economy(ctx.guild.id, ctx.author.id)
-        if u["balance"] < config.AURA_SHOP_COST:
-            return await ctx.send("❌ Saldo insufficiente.")
-        role = ctx.guild.get_role(config.FIRE_SHOP_ROLE)
-        if role is None:
-            return await ctx.send("❌ Ruolo non trovato.")
-        u["balance"] -= config.FIRE_SHOP_COST
-        data.save("economy", econ)
-        await ctx.author.add_roles(role)
-        await ctx.send(f"🎉 Hai acquistato il ruolo {role.mention}!")
 
 
 async def setup(bot):
