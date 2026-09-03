@@ -19,7 +19,7 @@ COGS = [
     "automod",
     "economy",
     "moderation",
-    "leveling",
+    "levelling",
     "fun",
     "help",
 ]
