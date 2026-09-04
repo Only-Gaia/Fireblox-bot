@@ -23,6 +23,7 @@ COGS = [
     "moderation",
     "levelling",
     "fun",
+    "utility",
     "help",
 ]
 
