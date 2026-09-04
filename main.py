@@ -1,7 +1,7 @@
 import asyncio
+import os
 import discord
 from discord.ext import commands
-
 import config
 
 intents = discord.Intents.default()
@@ -37,12 +37,24 @@ async def on_ready():
 
 
 async def load_cogs():
+    # Stampa la working directory e i file .py presenti, utile per debug su Railway
+    cwd = os.getcwd()
+    py_files = [f for f in os.listdir(cwd) if f.endswith(".py")]
+    print(f"📂 Working directory: {cwd}")
+    print(f"📄 File .py trovati: {py_files}")
+
     for cog in COGS:
+        expected_file = f"{cog}.py"
+        if expected_file not in py_files:
+            print(f"❌ File mancante per il cog '{cog}': non trovo '{expected_file}' in {cwd}")
+            continue
         try:
             await bot.load_extension(cog)
             print(f"✅ Cog caricato: {cog}")
-        except Exception as e:
-            print(f"❌ Errore caricamento cog '{cog}': {e}")
+        except Exception:
+            import traceback
+            print(f"❌ Errore caricamento cog '{cog}':")
+            traceback.print_exc()
 
 
 async def main():
