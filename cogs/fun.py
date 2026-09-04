@@ -6,6 +6,48 @@ import data
 
 MARRIAGES_KEY = "marriages"
 
+# Gif mostrata pubblicamente quando qualcuno clicca "Claim"
+NITRO_GIF_URL = "https://media.tenor.com/InJmZgYHqIkAAAAC/rickroll-roll.gif"
+
+
+# ==================== FAKE NITRO (embed + bottone pubblico) ====================
+
+class FakeNitroView(discord.ui.View):
+    def __init__(self, gifter: discord.abc.User):
+        super().__init__(timeout=300)
+        self.gifter = gifter
+        self.claimed = False
+
+    @discord.ui.button(label="Claim", style=discord.ButtonStyle.success)
+    async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.claimed:
+            return await interaction.response.defer()
+
+        self.claimed = True
+        button.disabled = True
+        button.label = "Reclamato"
+        button.style = discord.ButtonStyle.secondary
+
+        # aggiorna l'embed originale (visibile a tutti, non è ephemeral)
+        await interaction.response.edit_message(view=self)
+
+        # messaggio + gif pubblici, visti da chiunque nel canale
+        gif_embed = discord.Embed(color=discord.Color.blurple())
+        gif_embed.set_image(url=NITRO_GIF_URL)
+        await interaction.channel.send(
+            content=f"🎣 {interaction.user.mention} ha reclamato il regalo...",
+            embed=gif_embed,
+        )
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException:
+                pass
+
 
 class Fun(commands.Cog):
     def __init__(self, bot):
@@ -51,11 +93,24 @@ class Fun(commands.Cog):
     async def divorce(self, ctx, member: discord.Member):
         await ctx.send(f"💔 {ctx.author.mention} ha divorziato da {member.mention}.")
 
-    @commands.hybrid_command(name="fakenitro", description="Genera un fake nitro (per scherzo)")
+    # ---------- FAKENITRO ----------
+    @commands.hybrid_command(name="fakenitro", description="Genera un finto regalo Nitro (per scherzo)")
     async def fakenitro(self, ctx):
-        embed = discord.Embed(title="Nitro", description="Hai ricevuto un regalo!\n[Rivendica ora](https://discord.gift/fake)", color=discord.Color.blurple())
-        await ctx.send(embed=embed)
+        embed = discord.Embed(
+            title="You've been gifted a subscription!",
+            description=(
+                "You've been gifted **Nitro** for **1 month**! · Expires **tra un giorno**\n\n"
+                "[Disclaimer](https://discord.com)"
+            ),
+            color=discord.Color.blurple(),
+        )
+        embed.set_footer(text="🎁 Nitro")
 
+        view = FakeNitroView(ctx.author)
+        message = await ctx.send(embed=embed, view=view)
+        view.message = message
+
+    # ---------- SHIP ----------
     @commands.hybrid_command(name="ship", description="Calcola la compatibilità tra due utenti")
     async def ship(self, ctx, member1: discord.Member, member2: discord.Member = None):
         member2 = member2 or ctx.author
