@@ -70,7 +70,7 @@ class Fun(commands.Cog):
 
     @commands.hybrid_command(name="kill", description="Uccidi (per gioco) un utente")
     async def kill(self, ctx, member: discord.Member):
-        await ctx.send(f"🔪 {ctx.author.mention} ha eliminato {member.mention}! 
+        await ctx.send(f"🔪 {ctx.author.mention} ha eliminato {member.mention}! (per finta 😄)")
 
     @commands.hybrid_command(name="slap", description="Schiaffeggia un utente")
     async def slap(self, ctx, member: discord.Member):
