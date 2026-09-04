@@ -40,7 +40,6 @@ def save(name, obj):
 
 
 # ---------------- HELPER ECONOMIA ----------------
-
 def get_user_economy(guild_id, user_id):
     """Ritorna (dati_completi_economy, dati_utente) creando i default se mancanti."""
     econ = load("economy")
@@ -58,7 +57,6 @@ def get_user_economy(guild_id, user_id):
 
 
 # ---------------- HELPER LIVELLI ----------------
-
 def get_user_levels(guild_id, user_id):
     """Ritorna (dati_completi_levels, dati_utente) creando i default se mancanti."""
     levels = load("levels")
