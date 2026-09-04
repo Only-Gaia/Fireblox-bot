@@ -7,7 +7,7 @@ import data
 MARRIAGES_KEY = "marriages"
 
 # Gif mostrata pubblicamente quando qualcuno clicca "Claim"
-NITRO_GIF_URL = "https://media.tenor.com/InJmZgYHqIkAAAAC/rickroll-roll.gif"
+NITRO_GIF_URL = "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExc3VxdzNlb2k3cDFoNjQyNzlrdm1qbm5mZW1yaDNoNzJqcjA2NGYwciZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/PIFcFBYZhiIRllM1IF/giphy.gif"
 
 
 # ==================== FAKE NITRO (embed + bottone pubblico) ====================
@@ -70,7 +70,7 @@ class Fun(commands.Cog):
 
     @commands.hybrid_command(name="kill", description="Uccidi (per gioco) un utente")
     async def kill(self, ctx, member: discord.Member):
-        await ctx.send(f"🔪 {ctx.author.mention} ha eliminato {member.mention}! (per finta 😄)")
+        await ctx.send(f"🔪 {ctx.author.mention} ha eliminato {member.mention}! 
 
     @commands.hybrid_command(name="slap", description="Schiaffeggia un utente")
     async def slap(self, ctx, member: discord.Member):
