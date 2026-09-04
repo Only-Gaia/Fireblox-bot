@@ -4,8 +4,6 @@ import config
 
 
 # ---------------- DATI DEI COMANDI PER CATEGORIA ----------------
-# NB: i comandi di 'automod' non sono inclusi perché non è stato fornito il file automod.py.
-# Se mi mandi anche quello script, aggiorno questo help di conseguenza.
 
 CATEGORIES = {
     "💰 Economy": {
@@ -46,6 +44,7 @@ CATEGORIES = {
             ("lock", "🔒 Blocca il canale"),
             ("unlock", "🔒 Sblocca il canale"),
             ("slowmode <seconds>", "🔒 Imposta lo slowmode del canale"),
+            ("changename <member> <new_name>", "🔒 Cambia il nickname di un utente"),
             ("messagecount [member]", "Mostra i messaggi conteggiati di un utente"),
             ("messageadd <member> <amount>", "🔒 Aggiunge messaggi a un utente"),
             ("messageremove <member> <amount>", "🔒 Rimuove messaggi a un utente"),
@@ -71,10 +70,35 @@ CATEGORIES = {
             ("hug <member>", "Abbraccia un utente"),
             ("marry <member>", "Sposa un utente"),
             ("divorce <member>", "Divorzia da un utente"),
-            ("fakenitro", "Genera un fake nitro (per scherzo)"),
+            ("fakenitro", "Genera un finto regalo Nitro (per scherzo)"),
             ("ship <member1> [member2]", "Calcola la compatibilità tra due utenti"),
             ("rendigay [member]", "Mostra una percentuale a caso (per scherzo)"),
             ("aura [member]", "Calcola l'aura di un utente"),
+        ],
+    },
+    "🛠️ Automod": {
+        "emoji": "🛠️",
+        "commands": [
+            ("automod <on/off>", "🔒 Attiva/disattiva l'automod"),
+            ("automodlinks <on/off>", "🔒 Attiva/disattiva il filtro link"),
+            ("automodspam <on/off>", "🔒 Attiva/disattiva il filtro spam"),
+            ("automodlogset <channel>", "🔒 Imposta il canale log automod"),
+        ],
+    },
+    "⚙️ Utility": {
+        "emoji": "⚙️",
+        "commands": [
+            ("setwelcome <channel>", "🔒 Imposta il canale di benvenuto"),
+            ("setgoodbye <channel>", "🔒 Imposta il canale di addio"),
+            ("setwelcomegoodbyelogs <channel>", "🔒 Imposta il canale log welcome/goodbye"),
+            ("verifica", "🔒 Invia il messaggio con il bottone di verifica"),
+            ("roleverified <role>", "🔒 Configura il ruolo assegnato alla verifica"),
+            ("roleunverified <role>", "🔒 Configura il ruolo non verificato da rimuovere"),
+            ("userinfo [member]", "Mostra le info di un utente"),
+            ("serverinfo", "Mostra le info del server"),
+            ("blacklistadd <user> [motivo]", "🔒 Segnala un account come sospetto"),
+            ("blacklistremove <user>", "🔒 Rimuove un account dalla blacklist"),
+            ("blacklistlist", "🔒 Mostra gli account in blacklist"),
         ],
     },
 }
