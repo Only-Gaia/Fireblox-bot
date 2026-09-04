@@ -1,21 +1,39 @@
-# Ambiente
-.env
+# ================= PYTHON =================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ================= AMBIENTI VIRTUALI =================
 venv/
 env/
-__pycache__/
-*.pyc
+.venv/
+.env/
+ENV/
 
-# Database
-*.db
-*.sqlite3
+# ================= VARIABILI D'AMBIENTE / SEGRETI =================
+.env
+.env.local
+config_local.py
 
-# IDE
+# ================= DATI DEL BOT (NON committare i dati utenti) =================
+data_files/
+*.json
+!package.json
+
+# ================= LOG =================
+*.log
+logs/
+
+# ================= EDITOR / IDE =================
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# OS
+# ================= SISTEMA OPERATIVO =================
 .DS_Store
 Thumbs.db
 
-# Log
-*.log
+# ================= RAILWAY =================
+.railway/
