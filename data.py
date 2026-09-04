@@ -12,6 +12,8 @@ FILES = {
     "warns",
     "levels",
     "marriages",
+    "settings",
+    "blacklist",
 }
 
 
