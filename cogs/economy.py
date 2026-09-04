@@ -12,6 +12,168 @@ def cooldown_left(last_ts, seconds):
     return max(0, remaining)
 
 
+# ==================== TRIS (TIC TAC TOE) INTERATTIVO ====================
+
+class TrisButton(discord.ui.Button):
+    def __init__(self, x: int, y: int):
+        super().__init__(style=discord.ButtonStyle.secondary, label="\u200b", row=y)
+        self.x = x
+        self.y = y
+
+    async def callback(self, interaction: discord.Interaction):
+        view: TrisView = self.view
+
+        if interaction.user.id != view.player.id:
+            return await interaction.response.send_message(
+                "❌ Non è la tua partita!", ephemeral=True
+            )
+        if view.game_over or view.board[self.y][self.x] is not None:
+            return await interaction.response.defer()
+
+        # ---- mossa del giocatore ----
+        view.board[self.y][self.x] = "X"
+        self.label = "❌"
+        self.style = discord.ButtonStyle.danger
+        self.disabled = True
+
+        winner = view.check_winner()
+        if winner or view.is_full():
+            return await view.end_game(interaction, winner)
+
+        # ---- mossa del bot ----
+        view.bot_move()
+
+        winner = view.check_winner()
+        if winner or view.is_full():
+            return await view.end_game(interaction, winner)
+
+        await interaction.response.edit_message(embed=view.build_embed(), view=view)
+
+
+class TrisView(discord.ui.View):
+    def __init__(self, ctx, amount: int, timeout: int = 60):
+        super().__init__(timeout=timeout)
+        self.ctx = ctx
+        self.player = ctx.author
+        self.amount = amount
+        self.board = [[None, None, None] for _ in range(3)]
+        self.game_over = False
+        self.message = None
+
+        for y in range(3):
+            for x in range(3):
+                self.add_item(TrisButton(x, y))
+
+    def is_full(self):
+        return all(cell is not None for row in self.board for cell in row)
+
+    def check_winner(self):
+        b = self.board
+        lines = []
+        for i in range(3):
+            lines.append([b[i][0], b[i][1], b[i][2]])  # righe
+            lines.append([b[0][i], b[1][i], b[2][i]])  # colonne
+        lines.append([b[0][0], b[1][1], b[2][2]])       # diagonale
+        lines.append([b[0][2], b[1][1], b[2][0]])       # diagonale
+        for line in lines:
+            if line[0] is not None and line[0] == line[1] == line[2]:
+                return line[0]
+        return None
+
+    def bot_move(self):
+        empty = [(x, y) for y in range(3) for x in range(3) if self.board[y][x] is None]
+        if not empty:
+            return
+
+        # 1) il bot vince subito se può
+        for x, y in empty:
+            self.board[y][x] = "O"
+            if self.check_winner() == "O":
+                self._apply_bot_button(x, y)
+                return
+            self.board[y][x] = None
+
+        # 2) blocca il giocatore se sta per vincere
+        for x, y in empty:
+            self.board[y][x] = "X"
+            player_would_win = self.check_winner() == "X"
+            self.board[y][x] = None
+            if player_would_win:
+                self.board[y][x] = "O"
+                self._apply_bot_button(x, y)
+                return
+
+        # 3) preferisce il centro se libero
+        if self.board[1][1] is None:
+            self.board[1][1] = "O"
+            self._apply_bot_button(1, 1)
+            return
+
+        # 4) altrimenti mossa casuale
+        x, y = random.choice(empty)
+        self.board[y][x] = "O"
+        self._apply_bot_button(x, y)
+
+    def _apply_bot_button(self, x, y):
+        for item in self.children:
+            if isinstance(item, TrisButton) and item.x == x and item.y == y:
+                item.label = "⭕"
+                item.style = discord.ButtonStyle.primary
+                item.disabled = True
+                break
+
+    def build_embed(self, result_text: str = None):
+        embed = discord.Embed(title="❌⭕ Tris", color=config.EMBED_COLOR)
+        embed.description = result_text or f"Turno di: {self.player.mention}"
+        embed.set_footer(
+            text=f"Puntata: {self.amount} {config.CURRENCY_NAME}" if self.amount else "Partita amichevole"
+        )
+        return embed
+
+    async def end_game(self, interaction: discord.Interaction, winner):
+        self.game_over = True
+        for item in self.children:
+            item.disabled = True
+
+        econ, u = data.get_user_economy(self.ctx.guild.id, self.player.id)
+
+        if winner == "X":
+            if self.amount:
+                u["balance"] += self.amount
+                data.save("economy", econ)
+            result_text = f"🎉 {self.player.mention} ha vinto contro il bot!"
+            if self.amount:
+                result_text += f" (+{self.amount} {config.CURRENCY_NAME})"
+        elif winner == "O":
+            if self.amount:
+                u["balance"] -= self.amount
+                data.save("economy", econ)
+            result_text = f"🤖 Il bot ha vinto! {self.player.mention} ha perso."
+            if self.amount:
+                result_text += f" (-{self.amount} {config.CURRENCY_NAME})"
+        else:
+            result_text = f"🤝 Pareggio! {self.player.mention} non vince né perde nulla."
+
+        self.stop()
+        await interaction.response.edit_message(embed=self.build_embed(result_text), view=self)
+
+    async def on_timeout(self):
+        if self.game_over:
+            return
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(
+                    embed=self.build_embed(f"⏳ Partita scaduta, {self.player.mention} non ha giocato in tempo."),
+                    view=self,
+                )
+            except discord.HTTPException:
+                pass
+
+
+# ==================== COG ECONOMY ====================
+
 class Economy(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -75,7 +237,7 @@ class Economy(commands.Cog):
         data.save("economy", econ)
         await ctx.send(f"🎰 Hai aperto la Lucky Box e trovato **{amount}** {config.CURRENCY_NAME}!")
 
-    # ---------- LUCKY (aumenta fortuna, slowmode 5 min) ----------
+    # ---------- LUCKY (aumenta fortuna, cooldown 5 min) ----------
     @commands.hybrid_command(name="lucky", description="Aumenta la tua fortuna di 1 punto")
     @commands.cooldown(1, 300, commands.BucketType.user)
     async def lucky(self, ctx):
@@ -136,23 +298,21 @@ class Economy(commands.Cog):
         data.save("economy", econ)
         await ctx.send(msg)
 
-    # ---------- TRIS (contro il bot, semplificato) ----------
+    # ---------- TRIS (contro il bot, tabellone interattivo) ----------
     @commands.hybrid_command(name="tris", description="Gioca a tris contro il bot")
-    @app_commands.describe(amount="Puntata")
+    @app_commands.describe(amount="Puntata (opzionale)")
     async def tris(self, ctx, amount: int = 0):
-        econ, u = data.get_user_economy(ctx.guild.id, ctx.author.id)
-        if amount and u["balance"] < amount:
-            return await ctx.send("❌ Saldo insufficiente.")
-        win = random.choice([True, False])
-        if win and amount:
-            u["balance"] += amount
-            data.save("economy", econ)
-            return await ctx.send(f"❌⭕ Hai vinto a Tris! +{amount} {config.CURRENCY_NAME}")
-        elif amount:
-            u["balance"] -= amount
-            data.save("economy", econ)
-            return await ctx.send(f"❌⭕ Hai perso a Tris. -{amount} {config.CURRENCY_NAME}")
-        await ctx.send("❌⭕ " + ("Hai vinto!" if win else "Hai perso!"))
+        if amount:
+            if amount < 0:
+                return await ctx.send("❌ Importo non valido.")
+            econ, u = data.get_user_economy(ctx.guild.id, ctx.author.id)
+            if u["balance"] < amount:
+                return await ctx.send("❌ Saldo insufficiente.")
+
+        view = TrisView(ctx, amount)
+        embed = view.build_embed()
+        message = await ctx.send(embed=embed, view=view)
+        view.message = message
 
     # ---------- BLACKJACK (semplificato) ----------
     @commands.hybrid_command(name="blackjack", description="Gioca a blackjack")
