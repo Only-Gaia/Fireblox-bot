@@ -130,6 +130,21 @@ class Moderation(commands.Cog):
         await ctx.channel.edit(slowmode_delay=seconds)
         await ctx.send(f"🐌 Slowmode impostato a {seconds}s")
 
+    # ---------- CHANGENAME (cambia nickname a un utente) ----------
+    @commands.hybrid_command(name="changename", description="Cambia il nickname di un utente")
+    @app_commands.describe(member="Utente", new_name="Nuovo nome")
+    @commands.has_permissions(manage_nicknames=True)
+    async def changename(self, ctx, member: discord.Member, *, new_name: str):
+        old_name = member.display_name
+        try:
+            await member.edit(nick=new_name, reason=f"Nome cambiato da {ctx.author}")
+        except discord.Forbidden:
+            return await ctx.send(
+                "❌ Non ho i permessi per modificare il nickname di questo utente "
+                "(probabilmente ha un ruolo più alto del mio)."
+            )
+        await ctx.send(f"✏️ Nome di {member.mention} cambiato da **{old_name}** a **{new_name}**")
+
     # ---------- MESSAGE COUNT MANAGEMENT ----------
     @commands.hybrid_command(name="messagecount", description="Mostra i messaggi di un utente")
     @app_commands.describe(member="Utente")
