@@ -14,6 +14,7 @@ FILES = {
     "marriages",
     "settings",
     "blacklist",
+    "tickets",
 }
 
 
