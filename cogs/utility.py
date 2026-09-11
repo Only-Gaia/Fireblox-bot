@@ -1,7 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from discord.ui import View, Button
+from discord.ui import View, Button, Modal, TextInput
 from datetime import datetime, timezone
 import data
 
@@ -17,6 +17,8 @@ import data
 
 ACCOUNT_AGE_WARNING_DAYS = 7      # sotto questa soglia: account molto giovane
 SUSPICIOUS_NAME_KEYWORDS = ["nuke", "raid", "selfbot", "nitro.gg", "discord.gift"]
+
+MAX_STAFF_ROLES = 15
 
 
 def check_account_risk(member: discord.Member, blacklist: dict) -> list[str]:
@@ -112,12 +114,199 @@ class VerifyView(View):
         await interaction.response.send_message("✅ Verifica completata con successo! Benvenuto nel server.", ephemeral=True)
 
 
+# ---------- SISTEMA TICKET MM (MIDDLE MAN) ----------
+
+def get_staff_role_ids(guild_id: int) -> list[int]:
+    settings = data.load("settings").get(str(guild_id), {})
+    return settings.get("staff_roles", [])
+
+
+def is_staff_member(member: discord.Member) -> bool:
+    if member.guild_permissions.administrator:
+        return True
+    staff_ids = get_staff_role_ids(member.guild.id)
+    member_role_ids = [r.id for r in member.roles]
+    return any(rid in member_role_ids for rid in staff_ids)
+
+
+class AddUserModal(Modal, title="Aggiungi utente al ticket"):
+    user_input = TextInput(label="ID o menzione dell'utente", placeholder="Es: 123456789012345678", required=True)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        raw = self.user_input.value.strip().replace("<@", "").replace("!", "").replace(">", "")
+        try:
+            user_id = int(raw)
+        except ValueError:
+            return await interaction.response.send_message("❌ ID utente non valido.", ephemeral=True)
+
+        member = interaction.guild.get_member(user_id)
+        if not member:
+            return await interaction.response.send_message("❌ Utente non trovato nel server.", ephemeral=True)
+
+        try:
+            await interaction.channel.set_permissions(
+                member, view_channel=True, send_messages=True, read_message_history=True
+            )
+        except discord.Forbidden:
+            return await interaction.response.send_message(
+                "❌ Non ho i permessi per modificare i permessi del canale.", ephemeral=True
+            )
+
+        await interaction.response.send_message(f"✅ {member.mention} è stato aggiunto al ticket.")
+
+
+class TicketControlView(View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Claim", style=discord.ButtonStyle.green, emoji="🙋", custom_id="mm_ticket_claim")
+    async def claim(self, interaction: discord.Interaction, button: Button):
+        if not is_staff_member(interaction.user):
+            return await interaction.response.send_message("❌ Non hai un ruolo staff per questa azione.", ephemeral=True)
+
+        tickets = data.load("tickets")
+        g = tickets.setdefault(str(interaction.guild.id), {})
+        info = g.get(str(interaction.channel.id))
+        if info is None:
+            return await interaction.response.send_message("❌ Questo canale non risulta essere un ticket.", ephemeral=True)
+        if info.get("claimed_by"):
+            claimer = interaction.guild.get_member(info["claimed_by"])
+            return await interaction.response.send_message(
+                f"❌ Ticket già in carico a {claimer.mention if claimer else info['claimed_by']}.", ephemeral=True
+            )
+
+        info["claimed_by"] = interaction.user.id
+        data.save("tickets", tickets)
+        await interaction.response.send_message(f"✅ Ticket preso in carico da {interaction.user.mention}.")
+
+    @discord.ui.button(label="Unclaim", style=discord.ButtonStyle.grey, emoji="🙅", custom_id="mm_ticket_unclaim")
+    async def unclaim(self, interaction: discord.Interaction, button: Button):
+        tickets = data.load("tickets")
+        g = tickets.setdefault(str(interaction.guild.id), {})
+        info = g.get(str(interaction.channel.id))
+        if info is None:
+            return await interaction.response.send_message("❌ Questo canale non risulta essere un ticket.", ephemeral=True)
+        if info.get("claimed_by") != interaction.user.id and not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(
+                "❌ Solo chi ha in carico il ticket (o un admin) può rilasciarlo.", ephemeral=True
+            )
+
+        info["claimed_by"] = None
+        data.save("tickets", tickets)
+        await interaction.response.send_message(f"✅ Ticket rilasciato da {interaction.user.mention}.")
+
+    @discord.ui.button(label="Add user", style=discord.ButtonStyle.blurple, emoji="➕", custom_id="mm_ticket_adduser")
+    async def add_user(self, interaction: discord.Interaction, button: Button):
+        if not is_staff_member(interaction.user):
+            return await interaction.response.send_message("❌ Non hai un ruolo staff per questa azione.", ephemeral=True)
+        await interaction.response.send_modal(AddUserModal())
+
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.red, emoji="🔒", custom_id="mm_ticket_close")
+    async def close(self, interaction: discord.Interaction, button: Button):
+        tickets = data.load("tickets")
+        g = tickets.setdefault(str(interaction.guild.id), {})
+        info = g.get(str(interaction.channel.id))
+        if info is None:
+            return await interaction.response.send_message("❌ Questo canale non risulta essere un ticket.", ephemeral=True)
+        if not is_staff_member(interaction.user) and interaction.user.id != info.get("opener"):
+            return await interaction.response.send_message(
+                "❌ Solo lo staff o chi ha aperto il ticket può chiuderlo.", ephemeral=True
+            )
+
+        await interaction.response.send_message("🔒 Chiusura del ticket in corso...")
+
+        g.pop(str(interaction.channel.id), None)
+        data.save("tickets", tickets)
+
+        try:
+            await interaction.channel.delete(reason=f"Ticket chiuso da {interaction.user}")
+        except discord.Forbidden:
+            pass
+
+
+class MMPanelView(View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Richiedi MM", style=discord.ButtonStyle.blurple, emoji="👮‍♂️", custom_id="mm_ticket_create")
+    async def create_ticket(self, interaction: discord.Interaction, button: Button):
+        guild = interaction.guild
+        staff_role_ids = get_staff_role_ids(guild.id)
+
+        tickets = data.load("tickets")
+        guild_tickets = tickets.setdefault(str(guild.id), {})
+
+        # Impedisce di aprire più ticket MM contemporaneamente
+        for ch_id, info in guild_tickets.items():
+            if info.get("opener") == interaction.user.id and info.get("type") == "mm":
+                channel = guild.get_channel(int(ch_id))
+                if channel:
+                    return await interaction.response.send_message(
+                        f"❌ Hai già un ticket MM aperto: {channel.mention}", ephemeral=True
+                    )
+
+        await interaction.response.defer(ephemeral=True)
+
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
+            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True),
+        }
+        for role_id in staff_role_ids:
+            role = guild.get_role(role_id)
+            if role:
+                overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
+
+        try:
+            channel = await guild.create_text_channel(
+                name=f"mm-{interaction.user.name}",
+                overwrites=overwrites,
+                reason=f"Ticket MM aperto da {interaction.user}",
+            )
+        except discord.Forbidden:
+            return await interaction.followup.send("❌ Non ho i permessi per creare il canale ticket.", ephemeral=True)
+
+        guild_tickets[str(channel.id)] = {
+            "opener": interaction.user.id,
+            "claimed_by": None,
+            "type": "mm",
+        }
+        data.save("tickets", tickets)
+
+        embed = discord.Embed(
+            title="👮‍♂️ Ticket MM",
+            description=(
+                f"Ciao {interaction.user.mention}, grazie per aver richiesto un **Middle Man**.\n"
+                "Spiega qui la situazione, attendi che uno staff prenda in carico il ticket.\n\n"
+                "Usa i pulsanti qui sotto per gestire il ticket."
+            ),
+            color=discord.Color.blurple(),
+        )
+        embed.set_footer(text=f"Aperto da {interaction.user}")
+
+        await channel.send(content=interaction.user.mention, embed=embed, view=TicketControlView())
+
+        # Pinna un messaggio con i ruoli staff configurati
+        if staff_role_ids:
+            mentions = " ".join(f"<@&{rid}>" for rid in staff_role_ids if guild.get_role(rid))
+            if mentions:
+                staff_msg = await channel.send(f"📌 Staff: {mentions}")
+                try:
+                    await staff_msg.pin()
+                except discord.HTTPException:
+                    pass
+
+        await interaction.followup.send(f"✅ Ticket creato: {channel.mention}", ephemeral=True)
+
+
 class Utility(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     async def cog_load(self):
         self.bot.add_view(VerifyView())
+        self.bot.add_view(MMPanelView())
+        self.bot.add_view(TicketControlView())
 
     # ---------- WELCOME / GOODBYE ----------
     @commands.hybrid_command(name="setwelcome", description="Imposta il canale di benvenuto")
@@ -285,6 +474,52 @@ class Utility(commands.Cog):
             desc += f"<@{uid}> — {info.get('reason', 'N/A')}\n"
         embed.description = desc
         await ctx.send(embed=embed)
+
+    # ---------- TICKET MM (MIDDLE MAN) ----------
+    @commands.hybrid_command(name="ticketmm", description="Invia il pannello per richiedere un Middle Man (MM)")
+    @commands.has_permissions(administrator=True)
+    async def ticketmm(self, ctx):
+        embed = discord.Embed(
+            title="👮‍♂️ Richiedi un Middle Man",
+            description=(
+                "Se hai bisogno di un **Middle Man** per uno scambio sicuro, premi il pulsante qui sotto.\n\n"
+                "Verrà creato un canale privato tra te e lo staff dove potrai spiegare la situazione."
+            ),
+            color=discord.Color.blurple(),
+        )
+        embed.set_footer(text="Fire security")
+        await ctx.send(embed=embed, view=MMPanelView())
+
+    # ---------- CONFIGURAZIONE RUOLI STAFF (TICKET) ----------
+    @commands.hybrid_command(name="rolestaff", description="Aggiunge un ruolo staff da pingare/autorizzare nei ticket (max 15)")
+    @commands.has_permissions(administrator=True)
+    async def rolestaff(self, ctx, role: discord.Role):
+        settings = data.load("settings")
+        g = settings.setdefault(str(ctx.guild.id), {})
+        staff_roles = g.setdefault("staff_roles", [])
+
+        if role.id in staff_roles:
+            return await ctx.send(f"❌ {role.mention} è già configurato come ruolo staff.")
+        if len(staff_roles) >= MAX_STAFF_ROLES:
+            return await ctx.send(f"❌ Hai raggiunto il limite massimo di {MAX_STAFF_ROLES} ruoli staff.")
+
+        staff_roles.append(role.id)
+        data.save("settings", settings)
+        await ctx.send(f"✅ {role.mention} aggiunto ai ruoli staff ({len(staff_roles)}/{MAX_STAFF_ROLES}).")
+
+    @commands.hybrid_command(name="removestaff", description="Rimuove un ruolo staff configurato per i ticket")
+    @commands.has_permissions(administrator=True)
+    async def removestaff(self, ctx, role: discord.Role):
+        settings = data.load("settings")
+        g = settings.setdefault(str(ctx.guild.id), {})
+        staff_roles = g.setdefault("staff_roles", [])
+
+        if role.id not in staff_roles:
+            return await ctx.send(f"❌ {role.mention} non è configurato come ruolo staff.")
+
+        staff_roles.remove(role.id)
+        data.save("settings", settings)
+        await ctx.send(f"✅ {role.mention} rimosso dai ruoli staff ({len(staff_roles)}/{MAX_STAFF_ROLES}).")
 
 
 async def setup(bot):
