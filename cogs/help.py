@@ -99,6 +99,9 @@ CATEGORIES = {
             ("blacklistadd <user> [motivo]", "🔒 Segnala un account come sospetto"),
             ("blacklistremove <user>", "🔒 Rimuove un account dalla blacklist"),
             ("blacklistlist", "🔒 Mostra gli account in blacklist"),
+            ("ticketmm", "🔒 Invia il pannello per richiedere un Middle Man (MM)"),
+            ("rolestaff <role>", "🔒 Aggiunge un ruolo staff per i ticket (max 15)"),
+            ("removestaff <role>", "🔒 Rimuove un ruolo staff configurato per i ticket"),
         ],
     },
 }
