@@ -1,7 +1,13 @@
 import os
 
 # ================= BOT =================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "INSERISCI_QUI_IL_TUO_TOKEN")
+BOT_TOKEN = (os.getenv("BOT_TOKEN") or "").strip().strip('"').strip("'")
+if not BOT_TOKEN:
+    raise RuntimeError(
+        "Variabile d'ambiente BOT_TOKEN mancante o vuota! "
+        "Impostala nel pannello Variables del tuo hosting."
+    )
+
 PREFIX = "."  # prefisso per i comandi testuali (in aggiunta agli slash "/")
 OWNER_IDS = []  # ID Discord dei proprietari/admin principali del bot
 EMBED_COLOR = 0xFFA500
